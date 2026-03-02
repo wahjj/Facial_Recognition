@@ -1,0 +1,14 @@
+<annotation>
+	<folder>Aaron_Eckhart</folder>
+	<filename>Aaron_Eckhart_0001.jpg</filename>
+	<path>E:\PythonProject\YOLOV8\dataset\train\Images\Aaron_Eckhart\Aaron_Eckhart_0001.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>250</width>
+		<height>250</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+</annotation>
