@@ -6,5 +6,5 @@
     <option name="pathToExecutable" value="D:\anaconda3\Scripts\black.exe" />
     <option name="sdkUUID" value="d08d7d1d-2191-4e76-9935-bd38e85a674f" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.8 (Facial Recognition)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="face" project-jdk-type="Python SDK" />
 </project>

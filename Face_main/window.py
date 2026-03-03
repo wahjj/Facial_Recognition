@@ -9,7 +9,7 @@
 
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget
-from face_ui import Ui_Form  # 导入你提供的界面类
+from PyQT.face_ui import Ui_Form  # 导入你提供的界面类
 
 import os
 
