@@ -2,6 +2,7 @@ import torch
 from pathlib import Path
 import cv2
 import numpy as np
+from PyQt5.QtGui import QImage, QPixmap
 
 from ultralytics import YOLO
 from facenet_pytorch import InceptionResnetV1
@@ -71,6 +72,20 @@ class  FaceNet:
                 face_imgs.append(face_img)
 
         return face_imgs
+
+
+    def display_original_image(self, img):
+        """显示原始图像"""
+        # BGR 转 RGB
+        rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_img.shape
+        bytes_per_line = ch * w
+
+        # 转换为 QImage
+        qimg = QImage(rgb_img.data, w, h, bytes_per_line, QImage.Format_RGB888)
+        pixmap = QPixmap.fromImage(qimg)
+
+        return pixmap
 
 
 

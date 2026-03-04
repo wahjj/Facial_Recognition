@@ -91,29 +91,74 @@ class MainWindow(QWidget):
 
         if file_path:
             self.ui.lineEdit_7.setText(file_path)
-            self.detect_face_in_image(file_path)
-        pass
+            original_img = cv2.imread(file_path)
+            if original_img is not None:
+                pixmap1 = self.face_net.display_original_image(original_img)
+                self.ui.label_15.setPixmap(pixmap1.scaled(
+                    self.ui.label_15.width(), self.ui.label_15.height(),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                ))
 
-    def detect_face_in_image(self, image_path):
-        """检测图片中的人脸"""
-        try:
-            face_imgs = self.face_net.getfacepos(image_path)
+            face_imgs = self.face_net.getfacepos(file_path)
             if face_imgs:
                 self.current_faces = face_imgs
                 # 显示第一张检测到的人脸
-                self.display_face_image(face_imgs[0])
+                pixmap2 = self.face_net.display_original_image(face_imgs[0])
+                self.ui.label_30.setPixmap(pixmap2.scaled(
+                    self.ui.label_30.width(), self.ui.label_30.height(),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                ))
+
+                QMessageBox.information(
+                    self,
+                    "成功",
+                    f"检测到 {len(face_imgs)} 张人脸\n已自动选择第一张人脸"
+                )
             else:
-                QMessageBox.warning(self, "警告", "未检测到人脸！")
-        except Exception as e:
-            QMessageBox.critical(self, "错误", f"人脸检测失败: {str(e)}")
-        pass
+                QMessageBox.warning(self, "警告", "未检测到人脸，请更换图片！")
+
+
 
     def start_camera_enrollment(self):
         """开启摄像头进行人脸录入"""
-        pass
+        if self.cap is not None and self.cap.isOpened():
+            QMessageBox.warning(self, "警告", "摄像头已在运行中！")
+            return
+            # 尝试打开摄像头
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            QMessageBox.critical(self, "错误", "无法打开摄像头！请检查设备连接。")
+            return
+        # 启动定时器，定期获取摄像头帧
+        self.timer.start(30)  # 每30毫秒更新一次
+        self.current_faces = []  # 清空之前的人脸数据
+
 
     def capture_face_enrollment(self):
         """拍照进行人脸录入"""
+        if self.cap is None or not self.cap.isOpened():
+            QMessageBox.warning(self, "警告", "请先开启摄像头！")
+            return
+        if self.current_image is None:
+            QMessageBox.warning(self, "警告", "当前没有可用的摄像头画面！")
+            return
+            # 在当前画面中检测人脸
+        face_imgs = self.face_net.getfacepos(self.current_image)
+        if face_imgs:
+            self.current_faces = face_imgs
+            # 显示检测到的第一张人脸
+            pixmap1 = self.face_net.display_original_image(face_imgs[0])
+            self.ui.label_30.setPixmap(pixmap1.scaled(
+                self.ui.label_30.width(), self.ui.label_30.height(),
+                Qt.KeepAspectRatio, Qt.SmoothTransformation
+            ))
+            QMessageBox.information(
+                self,
+                "成功",
+                f"检测到 {len(face_imgs)} 张人脸\n已自动选择第一张人脸"
+            )
+        else:
+            QMessageBox.warning(self, "警告", "当前画面未检测到人脸！")
         pass
 
     def stop_camera_enrollment(self):
@@ -128,38 +173,270 @@ class MainWindow(QWidget):
 
     def update_frame(self):
         """更新摄像头帧"""
-        pass
+        if self.cap is not None and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                # 保存当前帧用于后续人脸捕获
+                self.current_image = frame.copy()
+                # 在帧上绘制人脸检测框
+                detected_frame = self.draw_face_boxes(frame)
+                # 显示原始摄像头画面到中间label
+                pixmap1 = self.face_net.display_original_image(detected_frame)
+                self.ui.label_15.setPixmap(pixmap1.scaled(
+                    self.ui.label_15.width(), self.ui.label_15.height(),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                ))
 
-    def detect_and_draw_faces(self, frame):
-        """检测人脸并绘制边界框"""
-        pass
+    def draw_face_boxes(self, frame):
+        """在帧上绘制人脸检测框"""
+        # 创建副本避免修改原始帧
+        processed_frame = frame.copy()
+        # 使用YOLO模型检测人脸
+        results = self.face_net.yolo_model.predict(processed_frame, conf=0.7, verbose=False)
+        boxes = results[0].boxes
+        # 遍历检测到的所有边界框
+        for box in boxes:
+            x0, y0, x1, y1 = map(int, box.xyxy[0].tolist())
+            # 绘制矩形框
+            cv2.rectangle(processed_frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+        return processed_frame
+
 
     def save_face_info(self):
         """保存人脸信息到数据库"""
-        pass
+        # 获取输入信息
+        name = self.ui.lineEdit_13.text().strip()
+        age = self.ui.lineEdit_14.text().strip()
+        student_id = self.ui.lineEdit_15.text().strip()
+        # 检查性别选择
+        gender = ""
+        if self.ui.radioButton_5.isChecked():  # 男
+            gender = "男"
+        elif self.ui.radioButton_6.isChecked():  # 女
+            gender = "女"
+        # 验证输入
+        if not name or not age or not student_id or not gender:
+            QMessageBox.warning(self, "警告", "请填写完整信息！")
+            return
+        try:
+            age = int(age)
+        except ValueError:
+            QMessageBox.warning(self, "警告", "年龄必须是数字！")
+            return
+        if not self.current_faces:
+            QMessageBox.warning(self, "警告", "没有检测到人脸！")
+            return
+        # 计算人脸特征向量
+        try:
+            face_img = self.current_faces[0]
+            embedding = self.face_net.facenet(face_img)
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"人脸特征提取失败：{str(e)}")
+            return
+        # 将图像转换为字节流存储
+        _, img_encoded = cv2.imencode('.jpg', face_img)
+        photo_bytes = img_encoded.tobytes()
+        # 插入数据库
+        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        sql = """
+                INSERT INTO student_info (姓名,年龄,性别,学号,录入时间,照片)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """
+        result = self.db.operation_sql(sql, [name, age, gender, student_id, current_time, photo_bytes])
+        if result is True:
+            QMessageBox.information(self, "成功", "人脸信息保存成功！")
+            # 清空输入框和显示
+            self.ui.lineEdit_13.clear()
+            self.ui.lineEdit_14.clear()
+            self.ui.lineEdit_15.clear()
+            self.ui.radioButton_5.setChecked(False)
+            self.ui.radioButton_6.setChecked(False)
+            self.ui.label_30.clear()
+            self.current_faces = []
+        else:
+            QMessageBox.critical(self, "错误", f"保存失败：{result}")
 
     def upload_image_for_recognition(self):
         """上传图片进行人脸识别"""
-        pass
-    def recognize_face_in_image(self, image_path):
-        """识别人脸图片"""
-        pass
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择识别图片", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
+        if file_path:
+            self.ui.lineEdit_11.setText(file_path)
+            original_img = cv2.imread(file_path)
+            if original_img is not None:
+                # 显示原始图像
+                pixmap1 = self.face_net.display_original_image(original_img)
+                self.ui.label_24.setPixmap(pixmap1.scaled(
+                    self.ui.label_24.width(), self.ui.label_24.height(),
+                    Qt.KeepAspectRatio, Qt.SmoothTransformation
+                ))
+                # 检测人脸
+                face_imgs = self.face_net.getfacepos(file_path)
+                if face_imgs:
+                    recognition_results = []
+                    for i, face_img in enumerate(face_imgs):
+                        # 提取人脸特征
+                        try:
+                            embedding = self.face_net.facenet(face_img)
+                            # 查找匹配的人脸
+                            match_result = self.find_matches(embedding)
+                            if match_result:
+                                name, confidence = match_result
+                                recognition_results.append(f"人脸{i+1}: {name} (置信度: {confidence:.2f})")
+                            else:
+                                recognition_results.append(f"人脸{i+1}: 未知人员 (置信度: 0.00)")
+                        except Exception as e:
+                            recognition_results.append(f"人脸{i+1}: 特征提取失败 ({str(e)})")
+                    # 更新识别结果显示
+                    result_text = "\n".join(recognition_results)
+                    self.ui.plainTextEdit_2.setPlainText(result_text)
+                else:
+                    QMessageBox.warning(self, "警告", "未检测到人脸！")
+                    self.ui.plainTextEdit_2.setPlainText("未检测到人脸！")
+            else:
+                QMessageBox.critical(self, "错误", "无法读取图片文件！")
+                self.ui.plainTextEdit_2.setPlainText("无法读取图片文件！")
 
-    def find_matches(self, query_embedding, threshold=0.6):
+
+    def find_matches(self, query_embedding, threshold=1.0):
         """查找数据库中最相似的人脸"""
-        pass
+        sql = "SELECT  ID, 姓名, 年龄, 性别, 学号, 录入时间, 照片 FROM student_info"
+        result = self.db.operation_sql(sql)
+        if not result:
+            return None
+        min_distance = float('inf')
+        best_match = None
+        # 获取查询结果
+        self.db.query.exec_(sql)
+        while self.db.query.next():
+            # 获取照片字段
+            blob_data = self.db.query.value(6)
+            if blob_data:
+                # 如果blob_data是QByteArray，则需要转换为bytes
+                if hasattr(blob_data, 'data'):
+                    blob_data = blob_data.data()
+                # 从BLOB数据重建图像
+                nparr = np.frombuffer(blob_data, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if img is not None:
+                    try:
+                        # 提取数据库中人脸的特征向量
+                        db_embedding = self.face_net.facenet(img)
+                        # 计算欧几里得距离
+                        distance = np.linalg.norm(query_embedding - db_embedding)
+                        if distance < min_distance and distance < threshold:
+                            min_distance = distance
+                            # 构建人员信息字典
+                            person_info = {
+                                '姓名': self.db.query.value(1),
+                                '年龄': self.db.query.value(2),
+                                '性别': self.db.query.value(3),
+                                '学号': self.db.query.value(4),
+                                '录入时间': self.db.query.value(5)
+                            }
+                            best_match = (person_info, 1 - distance)  # 人员信息和置信度
+                    except Exception as e:
+                        print(f"特征提取错误: {str(e)}")
+                        continue
+        return best_match if best_match else None
+
+
 
     def start_camera_recognition(self):
         """开启摄像头进行人脸识别"""
-        pass
+        if self.cap is not None and self.cap.isOpened():
+            QMessageBox.warning(self, "警告", "摄像头已在运行中！")
+            return
+
+        # 尝试打开摄像头
+        self.cap = cv2.VideoCapture(0)
+        if not self.cap.isOpened():
+            QMessageBox.critical(self, "错误", "无法打开摄像头！请检查设备连接。")
+            return
+
+        # 重置识别状态
+        self.recognition_locked = False  # 标记是否已锁定识别结果
+        self.locked_result = ""          # 存储锁定的识别结果
+
+        # 启动定时器，定期获取摄像头帧并进行人脸识别
+        self.timer.timeout.disconnect()  # 断开之前的连接
+        self.timer.timeout.connect(self.recognize_from_camera)
+        self.timer.start(30)  # 每30毫秒更新一次
+
 
     def recognize_from_camera(self):
         """从摄像头进行人脸识别"""
-        pass
+        if self.cap is not None and self.cap.isOpened():
+            ret, frame = self.cap.read()
+            if ret:
+                # 如果已经锁定识别结果，则不再进行新的识别
+                if not self.recognition_locked:
+                    # 识别人脸帧
+                    result_frame, recognition_result = self.recognize_face_in_frame(frame)
+
+                    # 检查是否有识别结果，如果有则锁定结果
+                    if recognition_result and "没有该人员信息" not in recognition_result and recognition_result.strip() != "":
+                        self.recognition_locked = True
+                        self.locked_result = recognition_result
+                        # 在文本框中显示锁定的识别结果
+                        self.ui.plainTextEdit_2.setPlainText(recognition_result)
+                    else:
+                        # 如果没有识别到有效结果，继续显示实时处理结果
+                        pixmap1 = self.face_net.display_original_image(result_frame)
+                        self.ui.label_24.setPixmap(pixmap1.scaled(
+                            self.ui.label_24.width(), self.ui.label_24.height(),
+                            Qt.KeepAspectRatio, Qt.SmoothTransformation
+                        ))
+                        self.ui.plainTextEdit_2.setPlainText(recognition_result)
+                else:
+                    # 如果已锁定结果，仍然更新摄像头画面但不更新识别结果
+                    result_frame, _ = self.recognize_face_in_frame(frame)
+                    pixmap1 = self.face_net.display_original_image(result_frame)
+                    self.ui.label_24.setPixmap(pixmap1.scaled(
+                        self.ui.label_24.width(), self.ui.label_24.height(),
+                        Qt.KeepAspectRatio, Qt.SmoothTransformation
+                    ))
+                    # 显示锁定的识别结果
+                    self.ui.plainTextEdit_2.setPlainText(self.locked_result)
+
 
     def recognize_face_in_frame(self, frame):
         """识别人脸帧"""
-        pass
+        # 创建副本避免修改原始帧
+        processed_frame = frame.copy()
+        # 使用YOLO模型检测人脸
+        results = self.face_net.yolo_model.predict(processed_frame, conf=0.7, verbose=False)
+        boxes = results[0].boxes
+        recognition_result = ""
+        # 遍历检测到的所有边界框
+        for i, box in enumerate(boxes):
+            x0, y0, x1, y1 = map(int, box.xyxy[0].tolist())
+            # 提取人脸区域
+            face_img = processed_frame[y0:y1, x0:x1]
+            try:
+                # 提取人脸特征
+                embedding = self.face_net.facenet(face_img)
+                # 查找匹配的人脸
+                match_result = self.find_matches(embedding)
+                if match_result:
+                    person_info, confidence = match_result
+                    name = person_info['姓名']
+                    age = person_info['年龄']
+                    gender = person_info['性别']
+                    student_id = person_info['学号']
+                    record_time = person_info['录入时间']
+                    # 更新识别结果
+                    recognition_result += f"人脸{i+1}:\n姓名: {name}\n年龄: {age}\n性别: {gender}\n学号: {student_id}\n录入时间: {record_time}\n置信度: {confidence:.2f}\n\n"
+                else:
+                    # 更新识别结果
+                    recognition_result += f"人脸{i+1}: 没有该人员信息\n\n"
+            except Exception as e:
+                recognition_result += f"人脸{i+1}: 特征提取失败 ({str(e)})\n\n"
+
+            # 绘制人脸框
+            cv2.rectangle(processed_frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+
+        return processed_frame, recognition_result
+
 
     def stop_camera_recognition(self):
         """关闭摄像头识别"""
