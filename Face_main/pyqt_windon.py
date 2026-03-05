@@ -4,10 +4,10 @@ import cv2
 import torch
 import numpy as np
 from datetime import datetime
-from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox, QFileDialog, QTableWidgetItem
+from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox, QFileDialog, QTableWidgetItem, QHeaderView
 from PyQt5.QtCore import QTimer, Qt, QByteArray
 from PyQt5.QtGui import QImage, QPixmap
-from PyQT.face_ui import Ui_Form
+from Face_main.face_ui import Ui_Form
 from Face_main.sqlite_db import MySqlite
 from Face_main.facenet_model import FaceNet
 
@@ -37,6 +37,8 @@ class MainWindow(QWidget):
 
         # 初始化数据库表
         self.create_table_if_not_exists()
+
+        self.load_table_data()
 
     def init_signals(self):
         """初始化信号槽连接"""
@@ -117,8 +119,6 @@ class MainWindow(QWidget):
             else:
                 QMessageBox.warning(self, "警告", "未检测到人脸，请更换图片！")
 
-
-
     def start_camera_enrollment(self):
         """开启摄像头进行人脸录入"""
         if self.cap is not None and self.cap.isOpened():
@@ -132,7 +132,6 @@ class MainWindow(QWidget):
         # 启动定时器，定期获取摄像头帧
         self.timer.start(30)  # 每30毫秒更新一次
         self.current_faces = []  # 清空之前的人脸数据
-
 
     def capture_face_enrollment(self):
         """拍照进行人脸录入"""
@@ -200,7 +199,6 @@ class MainWindow(QWidget):
             # 绘制矩形框
             cv2.rectangle(processed_frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
         return processed_frame
-
 
     def save_face_info(self):
         """保存人脸信息到数据库"""
@@ -296,24 +294,20 @@ class MainWindow(QWidget):
                 QMessageBox.critical(self, "错误", "无法读取图片文件！")
                 self.ui.plainTextEdit_2.setPlainText("无法读取图片文件！")
 
-
     def find_matches(self, query_embedding, threshold=1.0):
         """查找数据库中最相似的人脸"""
-        sql = "SELECT  ID, 姓名, 年龄, 性别, 学号, 录入时间, 照片 FROM student_info"
+        sql = "SELECT ID, 姓名, 年龄, 性别, 学号, 录入时间, 照片 FROM student_info"
         result = self.db.operation_sql(sql)
-        if not result:
+        if not result or result is True:
             return None
+
         min_distance = float('inf')
         best_match = None
-        # 获取查询结果
-        self.db.query.exec_(sql)
-        while self.db.query.next():
+        # 遍历查询结果
+        for row in result:
             # 获取照片字段
-            blob_data = self.db.query.value(6)
+            blob_data = row[6]  # 照片字段在第7列（索引6）
             if blob_data:
-                # 如果blob_data是QByteArray，则需要转换为bytes
-                if hasattr(blob_data, 'data'):
-                    blob_data = blob_data.data()
                 # 从BLOB数据重建图像
                 nparr = np.frombuffer(blob_data, np.uint8)
                 img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -327,19 +321,17 @@ class MainWindow(QWidget):
                             min_distance = distance
                             # 构建人员信息字典
                             person_info = {
-                                '姓名': self.db.query.value(1),
-                                '年龄': self.db.query.value(2),
-                                '性别': self.db.query.value(3),
-                                '学号': self.db.query.value(4),
-                                '录入时间': self.db.query.value(5)
+                                '姓名': row[1],  # 姓名
+                                '年龄': row[2],  # 年龄
+                                '性别': row[3],  # 性别
+                                '学号': row[4],  # 学号
+                                '录入时间': row[5]  # 录入时间
                             }
                             best_match = (person_info, 1 - distance)  # 人员信息和置信度
                     except Exception as e:
                         print(f"特征提取错误: {str(e)}")
                         continue
         return best_match if best_match else None
-
-
 
     def start_camera_recognition(self):
         """开启摄像头进行人脸识别"""
@@ -361,7 +353,6 @@ class MainWindow(QWidget):
         self.timer.timeout.disconnect()  # 断开之前的连接
         self.timer.timeout.connect(self.recognize_from_camera)
         self.timer.start(30)  # 每30毫秒更新一次
-
 
     def recognize_from_camera(self):
         """从摄像头进行人脸识别"""
@@ -397,7 +388,6 @@ class MainWindow(QWidget):
                     ))
                     # 显示锁定的识别结果
                     self.ui.plainTextEdit_2.setPlainText(self.locked_result)
-
 
     def recognize_face_in_frame(self, frame):
         """识别人脸帧"""
@@ -437,7 +427,6 @@ class MainWindow(QWidget):
 
         return processed_frame, recognition_result
 
-
     def stop_camera_recognition(self):
         """关闭摄像头识别"""
         self.timer.stop()
@@ -450,23 +439,107 @@ class MainWindow(QWidget):
 
     def search_database(self):
         """搜索数据库"""
-        pass
+        # 简单实现：根据学号或姓名搜索 (此处仅做演示，具体逻辑可根据需求扩展)
+        keyword = self.ui.lineEdit_12.text().strip()
+        if not keyword:
+            QMessageBox.warning(self, "警告", "请输入查询关键词！")
+            return
+
+        # 模糊查询 姓名 或 学号
+        sql = "SELECT ID, 姓名, 年龄, 性别, 学号, 录入时间 FROM student_info WHERE 姓名 LIKE ? OR 学号 LIKE ?"
+        param = f"%{keyword}%"
+        result = self.db.operation_sql(sql, [param, param])
+
+        # 准备数据列表
+        results = []
+
+        if result and result is not True:
+            results = result
+
+        # 清空并重新填充表格
+        self.ui.tableView_2.setRowCount(0)
+        headers = ["ID", "姓名", "年龄", "性别", "学号", "录入时间"]
+        self.ui.tableView_2.setColumnCount(len(headers))
+        self.ui.tableView_2.setHorizontalHeaderLabels(headers)
+        header = self.ui.tableView_2.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+
+        if results:
+            self.ui.tableView_2.setRowCount(len(results))
+            for row_idx, row_data in enumerate(results):
+                for col_idx, data in enumerate(row_data):
+                    if isinstance(data, bytes):
+                        data = "BLOB数据"
+                    item = QTableWidgetItem(str(data) if data is not None else "")
+                    item.setTextAlignment(Qt.AlignCenter)
+                    self.ui.tableView_2.setItem(row_idx, col_idx, item)
 
     def load_table_data(self):
         """加载表格数据"""
-        pass
+        # 清空现有表格
+        self.ui.tableView_2.setRowCount(0)
+
+        # 设置表头
+        headers = ["ID", "姓名", "年龄", "性别", "学号", "录入时间"]
+        self.ui.tableView_2.setColumnCount(len(headers))
+        self.ui.tableView_2.setHorizontalHeaderLabels(headers)
+
+        # 设置列宽自适应
+        header = self.ui.tableView_2.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.Stretch)
+
+        # 查询数据库
+        sql = "SELECT ID, 姓名, 年龄, 性别, 学号, 录入时间 FROM student_info"
+        result = self.db.operation_sql(sql)
+
+        # 准备数据列表
+        results = []
+
+        if result and result is not True:
+            results = result
+
+        if results:
+            self.ui.tableView_2.setRowCount(len(results))
+            for row_idx, row_data in enumerate(results):
+                for col_idx, data in enumerate(row_data):
+                    # 处理可能存在的字节数据或其他类型，确保转为字符串
+                    if isinstance(data, bytes):
+                        data = "BLOB数据" # 照片中不直接显示二进制
+                    item = QTableWidgetItem(str(data) if data is not None else "")
+                    item.setTextAlignment(Qt.AlignCenter) # 居中对齐
+                    self.ui.tableView_2.setItem(row_idx, col_idx, item)
 
     def delete_record(self):
         """删除记录"""
-        pass
+        # 获取当前选中的行
+        selected_rows = self.ui.tableView_2.selectionModel().selectedRows()
+        if not selected_rows:
+            QMessageBox.warning(self, "警告", "请先选择要删除的记录！")
+            return
+
+        # 确认删除
+        reply = QMessageBox.question(self, '确认删除', '确定要删除选中的记录吗？',
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            # 从后往前删除，避免索引变化
+            for index in sorted(selected_rows, key=lambda x: x.row(), reverse=True):
+                row = index.row()
+                # 获取该行的 ID (假设第一列是 ID)
+                id_item = self.ui.tableView_2.item(row, 0)
+                if id_item:
+                    record_id = id_item.text()
+                    sql = "DELETE FROM student_info WHERE ID = ?"
+                    result = self.db.operation_sql(sql, [record_id])
+                    if result is not True:
+                        QMessageBox.critical(self, "错误", f"删除记录 ID={record_id} 失败")
+
+            # 删除后刷新表格
+            self.load_table_data()
+            QMessageBox.information(self, "成功", "记录删除成功！")
 
     def refresh_table(self):
         """刷新表格"""
         self.load_table_data()
-
-    def cv2_to_qpixmap(self, cv_img):
-        """将OpenCV图像转换为QPixmap"""
-        pass
 
     def closeEvent(self, event):
         """关闭事件处理"""

@@ -530,8 +530,9 @@ class Ui_Form(object):
         self.verticalLayout_14.setStretch(1, 9)
 
         self.retranslateUi(Form)
-        self.stackedWidget_2.setCurrentIndex(2)
+        self.stackedWidget_2.setCurrentIndex(0)
         QtCore.QMetaObject.connectSlotsByName(Form)
+
 
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
