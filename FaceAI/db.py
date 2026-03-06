@@ -1,3 +1,4 @@
+# db.py
 from PyQt5.QtSql import QSqlQuery, QSqlDatabase
 from PyQt5.QtCore import QByteArray
 
@@ -5,13 +6,9 @@ from PyQt5.QtCore import QByteArray
 class MySqlite:
     def __init__(self):
         try:
-            # 添加SQLite数据库驱动
             self.database = QSqlDatabase.addDatabase("QSQLITE")
-            # 设置数据库文件名
             self.database.setDatabaseName("student.db")
-            # 打开数据库连接
             self.database.open()
-            # 创建SQL查询对象
             self.query = QSqlQuery()
         except Exception as e:
             print(f"无法建立连接，error:{e}")
@@ -19,63 +16,32 @@ class MySqlite:
     def operation_sql(self, sql, params=None):
         try:
             if params:
-                # 准备带参数的SQL语句
                 if not self.query.prepare(sql):
-                    print(f"SQL准备失败: {self.query.lastError().text()}")
                     return False
                 for param in params:
-                    # 处理 BLOB 数据
                     if isinstance(param, bytes):
                         self.query.addBindValue(QByteArray(param))
                     else:
                         self.query.addBindValue(param)
-                # 执行
                 if not self.query.exec_():
-                    print(f"SQL执行失败: {self.query.lastError().text()}")
                     return False
             else:
-                # 无参数直接执行
                 if not self.query.exec_(sql):
-                    print(f"SQL执行失败: {self.query.lastError().text()}")
                     return False
 
-            # 判断是否为查询语句 (SELECT)
             if sql.strip().upper().startswith("SELECT"):
                 results = []
-                # 遍历结果集并收集数据
                 while self.query.next():
                     row = []
-                    # 获取当前行的所有列值
                     for i in range(self.query.record().count()):
                         value = self.query.value(i)
-                        # 将 QByteArray 转回 bytes (如果需要)，或者直接保留
                         if isinstance(value, QByteArray):
                             value = bytes(value)
                         row.append(value)
                     results.append(row)
-                return results  # 返回数据列表
+                return results
             else:
-                return True   # 非查询语句成功则返回 True
-
+                return True
         except Exception as e:
-            print(f"操作SQL异常: {str(e)}")
+            print(f"SQL error: {e}")
             return False
-
-
-if __name__ == '__main__':
-    # 实例化数据库操作类
-    db = MySqlite()
-
-    # 创建表（如果不存在）
-    ret = db.operation_sql("""
-        create table IF NOT EXISTS student_info(
-            ID integer primary key AUTOINCREMENT,
-            姓名 text,
-            年龄 int,
-            性别 text,
-            学号 text,
-            录入时间 text,
-            照片 BLOB
-        )
-    """)
-    print(ret)  # 输出创建表的结果
