@@ -58,8 +58,8 @@ class CameraThread(QThread):
     def stop(self):
         self.running = False
 
+    """在帧上绘制人脸检测框"""
     def draw_face_boxes(self, frame):
-        """在帧上绘制人脸检测框"""
         processed_frame = frame.copy()
         results = self.face_net.yolo_model.predict(processed_frame, conf=0.7, verbose=False)
         boxes = results[0].boxes
@@ -68,8 +68,8 @@ class CameraThread(QThread):
             cv2.rectangle(processed_frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
         return processed_frame
 
+    """识别人脸帧"""
     def recognize_face_in_frame(self, frame):
-        """识别人脸帧"""
         processed_frame = frame.copy()
         results = self.face_net.yolo_model.predict(processed_frame, conf=0.7, verbose=False)
         boxes = results[0].boxes
@@ -101,8 +101,8 @@ class CameraThread(QThread):
 
         return processed_frame, recognition_result
 
+    """查找数据库中最相似的人脸"""
     def find_matches(self, query_embedding):
-        """查找数据库中最相似的人脸"""
         min_distance = float('inf')
         best_match = None
 
@@ -148,8 +148,8 @@ class MainWindow(QWidget):
 
         self.load_table_data()
 
+    """初始化信号槽连接"""
     def init_signals(self):
-        """初始化信号槽连接"""
         # 左侧功能按钮
         self.ui.pushButton_sb_3.clicked.connect(lambda: self.ui.stackedWidget_2.setCurrentIndex(0))
         self.ui.pushButton_25.clicked.connect(lambda: self.ui.stackedWidget_2.setCurrentIndex(1))
@@ -173,8 +173,8 @@ class MainWindow(QWidget):
         self.ui.pushButton_23.clicked.connect(self.delete_record)
         self.ui.pushButton_24.clicked.connect(self.refresh_table)
 
+    """创建数据库表"""
     def create_table_if_not_exists(self):
-        """创建数据库表"""
         sql = """
         CREATE TABLE IF NOT EXISTS student_info(
             ID INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -192,8 +192,8 @@ class MainWindow(QWidget):
         else:
             print("数据库表创建失败")
 
+    """刷新人脸缓存"""
     def _refresh_cache(self):
-        """刷新人脸缓存"""
         self.face_cache = []
         sql = "SELECT ID, 姓名, 年龄, 性别, 学号, 录入时间, 照片 FROM student_info"
         result = self.db.operation_sql(sql)
@@ -222,8 +222,10 @@ class MainWindow(QWidget):
                         except Exception as e:
                             print(f"特征提取错误: {str(e)}")
 
+    """--------------------第一页功能实现-----------------------------------------------"""
+
+    """上传图片进行人脸录入"""
     def upload_image_for_enrollment(self):
-        """上传图片进行人脸录入"""
         file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
 
         if file_path:
@@ -254,8 +256,8 @@ class MainWindow(QWidget):
             else:
                 QMessageBox.warning(self, "警告", "未检测到人脸，请更换图片！")
 
+    """开启摄像头进行人脸录入"""
     def start_camera_enrollment(self):
-        """开启摄像头进行人脸录入"""
         if self.cap is not None and self.cap.isOpened():
             QMessageBox.warning(self, "警告", "摄像头已在运行中！")
             return
@@ -272,8 +274,8 @@ class MainWindow(QWidget):
         self.camera_thread.frame_processed.connect(self.update_frame)
         self.camera_thread.start()
 
+    """拍照进行人脸录入"""
     def capture_face_enrollment(self):
-        """拍照进行人脸录入"""
         if self.cap is None or not self.cap.isOpened():
             QMessageBox.warning(self, "警告", "请先开启摄像头！")
             return
@@ -299,8 +301,8 @@ class MainWindow(QWidget):
         else:
             QMessageBox.warning(self, "警告", "当前画面未检测到人脸！")
 
+    """关闭摄像头"""
     def stop_camera_enrollment(self):
-        """关闭摄像头"""
         if self.camera_thread:
             self.camera_thread.stop()
             self.camera_thread.wait()
@@ -314,8 +316,8 @@ class MainWindow(QWidget):
         self.ui.label_15.clear()
         self.ui.label_30.clear()
 
+    """更新摄像头帧"""
     def update_frame(self, frame, recognition_result):
-        """更新摄像头帧"""
         if frame is not None:
             # 保存当前帧用于后续人脸捕获
             self.current_image = frame.copy()
@@ -326,8 +328,8 @@ class MainWindow(QWidget):
                 Qt.KeepAspectRatio, Qt.SmoothTransformation
             ))
 
+    """保存人脸信息到数据库"""
     def save_face_info(self):
-        """保存人脸信息到数据库"""
         # 获取输入信息
         name = self.ui.lineEdit_13.text().strip()
         age = self.ui.lineEdit_14.text().strip()
@@ -383,8 +385,10 @@ class MainWindow(QWidget):
         else:
             QMessageBox.critical(self, "错误", "保存失败")
 
+    """--------------------第二页功能实现-----------------------------------------------"""
+
+    """上传图片进行人脸识别"""
     def upload_image_for_recognition(self):
-        """上传图片进行人脸识别"""
         file_path, _ = QFileDialog.getOpenFileName(self, "选择识别图片", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
         if file_path:
             self.ui.lineEdit_11.setText(file_path)
@@ -423,6 +427,7 @@ class MainWindow(QWidget):
                 QMessageBox.critical(self, "错误", "无法读取图片文件！")
                 self.ui.plainTextEdit_2.setPlainText("无法读取图片文件！")
 
+    """从缓存中查找最相似的人脸"""
     def find_matches_from_cache(self, query_embedding, threshold=0.8):
         """从缓存中查找最相似的人脸"""
         min_distance = float('inf')
@@ -439,6 +444,7 @@ class MainWindow(QWidget):
 
         return best_match
 
+    """开启摄像头进行人脸识别"""
     def start_camera_recognition(self):
         """开启摄像头进行人脸识别"""
         if self.cap is not None and self.cap.isOpened():
@@ -457,8 +463,8 @@ class MainWindow(QWidget):
         self.camera_thread.frame_processed.connect(self.update_recognition_frame)
         self.camera_thread.start()
 
+    """更新识别帧"""
     def update_recognition_frame(self, frame, recognition_result):
-        """更新识别帧"""
         if frame is not None:
             # 显示处理后的帧
             pixmap1 = self.face_net.display_original_image(frame)
@@ -469,8 +475,8 @@ class MainWindow(QWidget):
             # 更新识别结果文本
             self.ui.plainTextEdit_2.setPlainText(recognition_result)
 
+    """关闭摄像头识别"""
     def stop_camera_recognition(self):
-        """关闭摄像头识别"""
         if self.camera_thread:
             self.camera_thread.stop()
             self.camera_thread.wait()
@@ -483,8 +489,10 @@ class MainWindow(QWidget):
         self.ui.label_24.clear()
         self.ui.plainTextEdit_2.clear()
 
+    """--------------------第三页功能实现-----------------------------------------------"""
+
+    """搜索数据库"""
     def search_database(self):
-        """搜索数据库"""
         # 简单实现：根据学号或姓名搜索
         keyword = self.ui.lineEdit_12.text().strip()
         if not keyword:
@@ -514,8 +522,8 @@ class MainWindow(QWidget):
                     item.setTextAlignment(Qt.AlignCenter)
                     self.ui.tableView_2.setItem(row_idx, col_idx, item)
 
+    """加载表格数据"""
     def load_table_data(self):
-        """加载表格数据"""
         # 清空现有表格
         self.ui.tableView_2.setRowCount(0)
 
@@ -543,8 +551,8 @@ class MainWindow(QWidget):
                     item.setTextAlignment(Qt.AlignCenter) # 居中对齐
                     self.ui.tableView_2.setItem(row_idx, col_idx, item)
 
+    """删除记录"""
     def delete_record(self):
-        """删除记录"""
         # 获取当前选中的行
         selected_rows = self.ui.tableView_2.selectionModel().selectedRows()
         if not selected_rows:
@@ -573,18 +581,21 @@ class MainWindow(QWidget):
             self._refresh_cache()
             QMessageBox.information(self, "成功", "记录删除成功！")
 
+    """刷新表格"""
     def refresh_table(self):
-        """刷新表格"""
         self.load_table_data()
 
+    """--------------------退出-----------------------------------------------"""
+
+    """关闭事件处理"""
     def closeEvent(self, event):
-        """关闭事件处理"""
         if self.camera_thread:
             self.camera_thread.stop()
             self.camera_thread.wait()
 
         if self.cap is not None:
             self.cap.release()
+
         event.accept()
 
 
