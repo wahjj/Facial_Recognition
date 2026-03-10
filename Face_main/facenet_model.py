@@ -95,7 +95,3 @@ if __name__ == '__main__':
     face = FaceNet(yolo_weights_path)
     face_imgs = face.getfacepos(img)
     print(face_imgs)
-
-
-# 项目功能
-# 项目演示

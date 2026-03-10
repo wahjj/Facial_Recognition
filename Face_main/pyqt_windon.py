@@ -16,7 +16,6 @@ os.environ.pop("QT_QPA_PLATFORM_PLUGIN_PATH", None)
 
 
 class CameraThread(QThread):
-    # 定义信号，用于发送处理结果
     frame_processed = pyqtSignal(object, str)
     status_updated = pyqtSignal(str)
 
@@ -78,7 +77,6 @@ class CameraThread(QThread):
         for i, box in enumerate(boxes):
             x0, y0, x1, y1 = map(int, box.xyxy[0].tolist())
             face_img = processed_frame[y0:y1, x0:x1]
-
             try:
                 embedding = self.face_net.facenet(face_img)
                 match_result = self.find_matches(embedding)
@@ -90,16 +88,14 @@ class CameraThread(QThread):
                     gender = person_info['性别']
                     student_id = person_info['学号']
                     record_time = person_info['录入时间']
-
                     recognition_result += f"人脸{i+1}:\n姓名: {name}\n年龄: {age}\n性别: {gender}\n学号: {student_id}\n录入时间: {record_time}\n置信度: {confidence:.2f}\n\n"
                 else:
                     recognition_result += f"人脸{i+1}: 没有该人员信息\n\n"
             except Exception as e:
                 recognition_result += f"人脸{i+1}: 特征提取失败 ({str(e)})\n\n"
-
             cv2.rectangle(processed_frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
 
-        return processed_frame, recognition_result
+        return processed_frame, recognition_result 
 
     """查找数据库中最相似的人脸"""
     def find_matches(self, query_embedding):
@@ -124,7 +120,6 @@ class MainWindow(QWidget):
         self.ui = Ui_Form()
         self.ui.setupUi(self)
 
-        # 初始化数据库
         self.db = MySqlite()
 
         # 初始化摄像头相关变量
@@ -136,14 +131,11 @@ class MainWindow(QWidget):
         self.yolo_path = r'C:\Users\Lenovo\Desktop\HQYJ\Facial_Recognition\my_yolo\runs\detect\train\weights\best.pt'
         self.face_net = FaceNet(self.yolo_path)
 
-        # 初始化人脸缓存
         self.face_cache = []
         self._refresh_cache()
 
-        # 绑定信号槽
         self.init_signals()
 
-        # 初始化数据库表
         self.create_table_if_not_exists()
 
         self.load_table_data()
@@ -262,13 +254,11 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "警告", "摄像头已在运行中！")
             return
 
-        # 尝试打开摄像头
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             QMessageBox.critical(self, "错误", "无法打开摄像头！请检查设备连接。")
             return
 
-        # 创建并启动摄像头线程
         self.camera_thread = CameraThread()
         self.camera_thread.setup(self.cap, self.face_net, 'enrollment', self.face_cache, 0.8)
         self.camera_thread.frame_processed.connect(self.update_frame)
@@ -283,7 +273,6 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "警告", "当前没有可用的摄像头画面！")
             return
 
-        # 在当前画面中检测人脸
         face_imgs = self.face_net.getfacepos(self.current_image)
         if face_imgs:
             self.current_faces = face_imgs
@@ -312,16 +301,15 @@ class MainWindow(QWidget):
             self.cap.release()
             self.cap = None
 
-        # 清空显示
         self.ui.label_15.clear()
         self.ui.label_30.clear()
 
     """更新摄像头帧"""
     def update_frame(self, frame, recognition_result):
         if frame is not None:
-            # 保存当前帧用于后续人脸捕获
+
             self.current_image = frame.copy()
-            # 显示原始摄像头画面到中间label
+
             pixmap1 = self.face_net.display_original_image(frame)
             self.ui.label_15.setPixmap(pixmap1.scaled(
                 self.ui.label_15.width(), self.ui.label_15.height(),
@@ -330,17 +318,16 @@ class MainWindow(QWidget):
 
     """保存人脸信息到数据库"""
     def save_face_info(self):
-        # 获取输入信息
         name = self.ui.lineEdit_13.text().strip()
         age = self.ui.lineEdit_14.text().strip()
         student_id = self.ui.lineEdit_15.text().strip()
-        # 检查性别选择
+
         gender = ""
         if self.ui.radioButton_5.isChecked():  # 男
             gender = "男"
         elif self.ui.radioButton_6.isChecked():  # 女
             gender = "女"
-        # 验证输入
+
         if not name or not age or not student_id or not gender:
             QMessageBox.warning(self, "警告", "请填写完整信息！")
             return
@@ -352,7 +339,7 @@ class MainWindow(QWidget):
         if not self.current_faces:
             QMessageBox.warning(self, "警告", "没有检测到人脸！")
             return
-        # 计算人脸特征向量
+
         try:
             face_img = self.current_faces[0]
             embedding = self.face_net.facenet(face_img)
@@ -362,7 +349,7 @@ class MainWindow(QWidget):
         # 将图像转换为字节流存储
         _, img_encoded = cv2.imencode('.jpg', face_img)
         photo_bytes = img_encoded.tobytes()
-        # 插入数据库
+
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         sql = """
                 INSERT INTO student_info (姓名,年龄,性别,学号,录入时间,照片)
@@ -371,7 +358,7 @@ class MainWindow(QWidget):
         result = self.db.operation_sql(sql, [name, age, gender, student_id, current_time, photo_bytes])
         if result:
             QMessageBox.information(self, "成功", "人脸信息保存成功！")
-            # 清空输入框和显示
+
             self.ui.lineEdit_13.clear()
             self.ui.lineEdit_14.clear()
             self.ui.lineEdit_15.clear()
@@ -380,7 +367,6 @@ class MainWindow(QWidget):
             self.ui.label_30.clear()
             self.current_faces = []
 
-            # 刷新缓存
             self._refresh_cache()
         else:
             QMessageBox.critical(self, "错误", "保存失败")
@@ -394,21 +380,18 @@ class MainWindow(QWidget):
             self.ui.lineEdit_11.setText(file_path)
             original_img = cv2.imread(file_path)
             if original_img is not None:
-                # 显示原始图像
                 pixmap1 = self.face_net.display_original_image(original_img)
                 self.ui.label_24.setPixmap(pixmap1.scaled(
                     self.ui.label_24.width(), self.ui.label_24.height(),
                     Qt.KeepAspectRatio, Qt.SmoothTransformation
                 ))
-                # 检测人脸
+
                 face_imgs = self.face_net.getfacepos(file_path)
                 if face_imgs:
                     recognition_results = []
                     for i, face_img in enumerate(face_imgs):
-                        # 提取人脸特征
                         try:
                             embedding = self.face_net.facenet(face_img)
-                            # 查找匹配的人脸
                             match_result = self.find_matches_from_cache(embedding)
                             if match_result:
                                 name, confidence = match_result
@@ -417,7 +400,7 @@ class MainWindow(QWidget):
                                 recognition_results.append(f"人脸{i+1}: 未知人员 (置信度: 0.00)")
                         except Exception as e:
                             recognition_results.append(f"人脸{i+1}: 特征提取失败 ({str(e)})")
-                    # 更新识别结果显示
+
                     result_text = "\n".join(recognition_results)
                     self.ui.plainTextEdit_2.setPlainText(result_text)
                 else:
@@ -429,7 +412,6 @@ class MainWindow(QWidget):
 
     """从缓存中查找最相似的人脸"""
     def find_matches_from_cache(self, query_embedding, threshold=0.8):
-        """从缓存中查找最相似的人脸"""
         min_distance = float('inf')
         best_match = None
 
@@ -446,18 +428,15 @@ class MainWindow(QWidget):
 
     """开启摄像头进行人脸识别"""
     def start_camera_recognition(self):
-        """开启摄像头进行人脸识别"""
         if self.cap is not None and self.cap.isOpened():
             QMessageBox.warning(self, "警告", "摄像头已在运行中！")
             return
 
-        # 尝试打开摄像头
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             QMessageBox.critical(self, "错误", "无法打开摄像头！请检查设备连接。")
             return
 
-        # 创建并启动摄像头线程
         self.camera_thread = CameraThread()
         self.camera_thread.setup(self.cap, self.face_net, 'recognition', self.face_cache, 0.8)
         self.camera_thread.frame_processed.connect(self.update_recognition_frame)
@@ -466,13 +445,11 @@ class MainWindow(QWidget):
     """更新识别帧"""
     def update_recognition_frame(self, frame, recognition_result):
         if frame is not None:
-            # 显示处理后的帧
             pixmap1 = self.face_net.display_original_image(frame)
             self.ui.label_24.setPixmap(pixmap1.scaled(
                 self.ui.label_24.width(), self.ui.label_24.height(),
                 Qt.KeepAspectRatio, Qt.SmoothTransformation
             ))
-            # 更新识别结果文本
             self.ui.plainTextEdit_2.setPlainText(recognition_result)
 
     """关闭摄像头识别"""
@@ -493,18 +470,15 @@ class MainWindow(QWidget):
 
     """搜索数据库"""
     def search_database(self):
-        # 简单实现：根据学号或姓名搜索
         keyword = self.ui.lineEdit_12.text().strip()
         if not keyword:
             QMessageBox.warning(self, "警告", "请输入查询关键词！")
             return
 
-        # 模糊查询 姓名 或 学号
         sql = "SELECT ID, 姓名, 年龄, 性别, 学号, 录入时间 FROM student_info WHERE 姓名 LIKE ? OR 学号 LIKE ?"
         param = f"%{keyword}%"
         result = self.db.operation_sql(sql, [param, param])
 
-        # 清空并重新填充表格
         self.ui.tableView_2.setRowCount(0)
         headers = ["ID", "姓名", "年龄", "性别", "学号", "录入时间"]
         self.ui.tableView_2.setColumnCount(len(headers))
@@ -524,19 +498,15 @@ class MainWindow(QWidget):
 
     """加载表格数据"""
     def load_table_data(self):
-        # 清空现有表格
         self.ui.tableView_2.setRowCount(0)
 
-        # 设置表头
         headers = ["ID", "姓名", "年龄", "性别", "学号", "录入时间"]
         self.ui.tableView_2.setColumnCount(len(headers))
         self.ui.tableView_2.setHorizontalHeaderLabels(headers)
 
-        # 设置列宽自适应
         header = self.ui.tableView_2.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.Stretch)
 
-        # 查询数据库
         sql = "SELECT ID, 姓名, 年龄, 性别, 学号, 录入时间 FROM student_info"
         result = self.db.operation_sql(sql)
 
@@ -546,7 +516,7 @@ class MainWindow(QWidget):
                 for col_idx, data in enumerate(row_data):
                     # 处理可能存在的字节数据或其他类型，确保转为字符串
                     if isinstance(data, bytes):
-                        data = "BLOB数据" # 照片中不直接显示二进制
+                        data = "BLOB数据"
                     item = QTableWidgetItem(str(data) if data is not None else "")
                     item.setTextAlignment(Qt.AlignCenter) # 居中对齐
                     self.ui.tableView_2.setItem(row_idx, col_idx, item)
@@ -559,14 +529,12 @@ class MainWindow(QWidget):
             QMessageBox.warning(self, "警告", "请先选择要删除的记录！")
             return
 
-        # 确认删除
         reply = QMessageBox.question(self, '确认删除', '确定要删除选中的记录吗？',
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply == QMessageBox.Yes:
             # 从后往前删除，避免索引变化
             for index in sorted(selected_rows, key=lambda x: x.row(), reverse=True):
                 row = index.row()
-                # 获取该行的 ID (假设第一列是 ID)
                 id_item = self.ui.tableView_2.item(row, 0)
                 if id_item:
                     record_id = id_item.text()
@@ -575,9 +543,7 @@ class MainWindow(QWidget):
                     if not result:
                         QMessageBox.critical(self, "错误", f"删除记录 ID={record_id} 失败")
 
-            # 删除后刷新表格
             self.load_table_data()
-            # 刷新缓存
             self._refresh_cache()
             QMessageBox.information(self, "成功", "记录删除成功！")
 
@@ -604,3 +570,9 @@ if __name__ == '__main__':
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
+
+
+#项目背景
+#项目功能
+#项目演示
+#项目总结
